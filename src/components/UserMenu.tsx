@@ -73,6 +73,7 @@ export const UserMenu: React.FC = () => {
   const [isDownloadManagementOpen, setIsDownloadManagementOpen] = useState(false);
   const [authInfo, setAuthInfo] = useState<AuthInfo | null>(null);
   const [storageType, setStorageType] = useState<string>('localstorage');
+  const [displayStorageType, setDisplayStorageType] = useState<string>('localstorage');
   const [mounted, setMounted] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
 
@@ -413,9 +414,11 @@ export const UserMenu: React.FC = () => {
       const auth = getAuthInfoFromBrowserCookie();
       setAuthInfo(auth);
 
-      const type =
-        (window as any).RUNTIME_CONFIG?.STORAGE_TYPE || 'localstorage';
+      const runtimeConfig = (window as any).RUNTIME_CONFIG || {};
+      const type = runtimeConfig.STORAGE_TYPE || 'localstorage';
+      const displayType = runtimeConfig.DISPLAY_STORAGE_TYPE || type;
       setStorageType(type);
+      setDisplayStorageType(displayType);
     }
   }, []);
 
@@ -1498,7 +1501,7 @@ export const UserMenu: React.FC = () => {
               </div>
               <div className='text-[10px] text-gray-400 dark:text-gray-500'>
                 数据存储：
-                {storageType === 'localstorage' ? '本地' : storageType}
+                {displayStorageType === 'localstorage' ? '本地' : displayStorageType}
               </div>
             </div>
           </div>

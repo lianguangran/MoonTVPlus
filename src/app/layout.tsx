@@ -173,8 +173,13 @@ export default async function RootLayout({
   }
 
   // 将运行时配置注入到全局 window 对象，供客户端在运行时读取
+  const runtimeStorageType = process.env.NEXT_PUBLIC_STORAGE_TYPE || 'localstorage';
+  const isCloudflare = process.env.CF_PAGES === '1' || process.env.BUILD_TARGET === 'cloudflare';
+  const displayStorageType = runtimeStorageType === 'd1' && !isCloudflare ? 'sqlite' : runtimeStorageType;
+
   const runtimeConfig = {
-    STORAGE_TYPE: process.env.NEXT_PUBLIC_STORAGE_TYPE || 'localstorage',
+    STORAGE_TYPE: runtimeStorageType,
+    DISPLAY_STORAGE_TYPE: displayStorageType,
     DOUBAN_PROXY_TYPE: doubanProxyType,
     DOUBAN_PROXY: doubanProxy,
     DOUBAN_IMAGE_PROXY_TYPE: doubanImageProxyType,
