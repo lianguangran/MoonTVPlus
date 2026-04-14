@@ -32,7 +32,6 @@ import {
 import type { DanmakuAnime, DanmakuComment, DanmakuSelection, DanmakuSettings } from '@/lib/danmaku/types';
 import {
   deleteFavorite,
-  deletePlayRecord,
   deleteSkipConfig,
   generateStorageKey,
   getAllPlayRecords,
@@ -40,6 +39,7 @@ import {
   getEpisodeFilterConfig,
   getSkipConfig,
   isFavorited,
+  migratePlayRecord,
   saveFavorite,
   savePlayRecord,
   saveSkipConfig,
@@ -4154,6 +4154,42 @@ function PlayPageClient() {
     }
   }, [detail, currentEpisodeIndex]);
 
+  const getSourceSwitchResumeTime = async (
+    episodeIndex: number,
+    currentPlayTime: number
+  ): Promise<number | null> => {
+    if (currentPlayTime > 1) {
+      return currentPlayTime;
+    }
+
+    if (!currentSourceRef.current || !currentIdRef.current) {
+      return null;
+    }
+
+    try {
+      const allRecords = await getAllPlayRecords();
+      const currentRecord = allRecords[
+        generateStorageKey(currentSourceRef.current, currentIdRef.current)
+      ];
+
+      if (
+        currentRecord &&
+        currentRecord.index - 1 === episodeIndex &&
+        currentRecord.play_time > 1
+      ) {
+        return currentRecord.play_time;
+      }
+    } catch (error) {
+      console.warn('[Play] Failed to read source-switch play record:', error);
+    }
+
+    return loadLocalEpisodeProgress(
+      currentSourceRef.current,
+      currentIdRef.current,
+      episodeIndex
+    );
+  };
+
   // 处理换源
   const handleSourceChange = async (
     newSource: string,
@@ -4174,19 +4210,6 @@ function PlayPageClient() {
       // 记录当前播放进度（仅在同一集数切换时恢复）
       const currentPlayTime = artPlayerRef.current?.currentTime || 0;
       console.log('换源前当前播放时间:', currentPlayTime);
-
-      // 清除前一个历史记录
-      if (currentSourceRef.current && currentIdRef.current) {
-        try {
-          await deletePlayRecord(
-            currentSourceRef.current,
-            currentIdRef.current
-          );
-          console.log('已清除前一个播放记录');
-        } catch (err) {
-          console.error('清除播放记录失败:', err);
-        }
-      }
 
       // 清除并设置下一个跳过片头片尾配置
       if (currentSourceRef.current && currentIdRef.current) {
@@ -4237,22 +4260,25 @@ function PlayPageClient() {
       }
 
       // 尝试跳转到当前正在播放的集数
-      let targetIndex = currentEpisodeIndex;
+      const previousEpisodeIndex = currentEpisodeIndexRef.current;
+      const previousSource = currentSourceRef.current;
+      const previousId = currentIdRef.current;
+      let targetIndex = previousEpisodeIndex;
 
       // 如果当前集数超出新源的范围，则跳转到第一集
       if (!newDetail.episodes || targetIndex >= newDetail.episodes.length) {
         targetIndex = 0;
       }
 
-      // 如果仍然是同一集数且播放进度有效，则在播放器就绪后恢复到原始进度
-      if (targetIndex !== currentEpisodeIndex) {
-        resumeTimeRef.current = 0;
-      } else if (
-        (!resumeTimeRef.current || resumeTimeRef.current === 0) &&
-        currentPlayTime > 1
-      ) {
-        resumeTimeRef.current = currentPlayTime;
-      }
+      const isSameEpisodeSwitch = targetIndex === previousEpisodeIndex;
+      const resumeTime = isSameEpisodeSwitch
+        ? await getSourceSwitchResumeTime(previousEpisodeIndex, currentPlayTime)
+        : loadLocalEpisodeProgress(
+            newSource,
+            newId,
+            targetIndex
+          );
+      resumeTimeRef.current = resumeTime;
 
       // 更新URL参数（不刷新页面）
       const newUrl = new URL(window.location.href);
@@ -4290,6 +4316,47 @@ function PlayPageClient() {
       setVideoCover(finalCover);
       setCorrectedDesc(finalDesc);
       setVideoDoubanId(newDetail.douban_id || 0);
+
+      if (isSameEpisodeSwitch && resumeTime && resumeTime > 1) {
+        const currentDuration = artPlayerRef.current?.duration || 0;
+        saveLocalEpisodeProgress(
+          newSource,
+          newId,
+          targetIndex,
+          resumeTime,
+          currentDuration
+        );
+
+        try {
+          const migratedRecord = {
+            title: finalTitle,
+            source_name: newDetail.source_name || '',
+            year: newDetail.year || '',
+            cover: finalCover || '',
+            index: targetIndex + 1,
+            total_episodes: newDetail.episodes?.length || 1,
+            play_time: Math.floor(resumeTime),
+            total_time: Math.floor(currentDuration),
+            save_time: Date.now(),
+            search_title: searchTitle,
+          };
+
+          if (previousSource && previousId) {
+            await migratePlayRecord(
+              previousSource,
+              previousId,
+              newSource,
+              newId,
+              migratedRecord
+            );
+          } else {
+            await savePlayRecord(newSource, newId, migratedRecord);
+          }
+        } catch (error) {
+          console.warn('[Play] Failed to migrate source-switch play record:', error);
+        }
+      }
+
       // newSource 已经是完整格式
       setCurrentSource(newSource);
       setCurrentId(newId);
@@ -5717,8 +5784,7 @@ function PlayPageClient() {
           const video = artPlayerRef.current.video as HTMLVideoElement & {
             webkitPreservesPitch?: boolean;
           };
-          const playbackRate = artPlayerRef.current.playbackRate || 1;
-          const shouldPreservePitch = playbackRate <= 2;
+          const shouldPreservePitch = true;
 
           if ('preservesPitch' in video) {
             video.preservesPitch = shouldPreservePitch;

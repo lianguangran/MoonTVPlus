@@ -887,6 +887,88 @@ export async function deletePlayRecord(
   }
 }
 
+/**
+ * 迁移播放记录到新的 source/id。
+ * 用于换源时保留单一记忆点语义：当前进度迁移到新源后，再清理旧源记录。
+ */
+export async function migratePlayRecord(
+  fromSource: string,
+  fromId: string,
+  toSource: string,
+  toId: string,
+  record: PlayRecord
+): Promise<void> {
+  const fromKey = generateStorageKey(fromSource, fromId);
+  const toKey = generateStorageKey(toSource, toId);
+
+  if (fromKey === toKey) {
+    await savePlayRecord(toSource, toId, record);
+    return;
+  }
+
+  if (STORAGE_TYPE !== 'localstorage') {
+    const cachedRecords = {
+      ...(cacheManager.getCachedPlayRecords() || {}),
+    };
+
+    delete cachedRecords[fromKey];
+    cachedRecords[toKey] = record;
+    cacheManager.cachePlayRecords(cachedRecords);
+
+    window.dispatchEvent(
+      new CustomEvent('playRecordsUpdated', {
+        detail: cachedRecords,
+      })
+    );
+
+    const persistMove = async () => {
+      await fetchWithAuth('/api/playrecords', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ key: toKey, record }),
+      });
+
+      await fetchWithAuth(`/api/playrecords?key=${encodeURIComponent(fromKey)}`, {
+        method: 'DELETE',
+      });
+    };
+
+    persistMove().catch((err) => {
+      console.warn('迁移播放记录到数据库失败，稍后重试:', err);
+
+      window.setTimeout(() => {
+        persistMove().catch((retryErr) => {
+          console.warn('迁移播放记录后台重试失败:', retryErr);
+        });
+      }, 3000);
+    });
+    return;
+  }
+
+  if (typeof window === 'undefined') {
+    console.warn('无法在服务端迁移播放记录到 localStorage');
+    return;
+  }
+
+  try {
+    const allRecords = await getAllPlayRecords();
+    delete allRecords[fromKey];
+    allRecords[toKey] = record;
+    localStorage.setItem(PLAY_RECORDS_KEY, JSON.stringify(allRecords));
+    window.dispatchEvent(
+      new CustomEvent('playRecordsUpdated', {
+        detail: allRecords,
+      })
+    );
+  } catch (err) {
+    console.error('迁移播放记录失败:', err);
+    triggerGlobalError('迁移播放记录失败');
+    throw err;
+  }
+}
+
 /* ---------------- 搜索历史相关 API ---------------- */
 
 /**
@@ -2256,4 +2338,3 @@ export async function saveEpisodeFilterConfig(
     throw err;
   }
 }
-
