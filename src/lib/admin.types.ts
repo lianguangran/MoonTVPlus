@@ -25,6 +25,11 @@ export interface AdminConfig {
     TMDBApiKey?: string;
     TMDBProxy?: string;
     TMDBReverseProxy?: string;
+    // 动漫/Bangumi配置
+    BangumiDataSource?: 'direct' | 'server-proxy' | 'custom-baseurl';
+    BangumiApiBaseUrl?: string;
+    BangumiImageBaseUrl?: string;
+    BangumiProxy?: string;
     BannerDataSource?: string; // 轮播图数据源：TMDB、TX 或 Douban
     RecommendationDataSource?: string; // 更多推荐数据源：Douban、TMDB、Mixed、MixedSmart
     // Pansou配置
@@ -37,6 +42,7 @@ export interface AdminConfig {
     MagnetMikanReverseProxy?: string;
     MagnetDmhyReverseProxy?: string;
     MagnetAcgripReverseProxy?: string;
+    MagnetNyaaReverseProxy?: string;
     // 评论功能开关
     EnableComments: boolean;
     // 自定义去广告代码
@@ -80,6 +86,7 @@ export interface AdminConfig {
       permissions?: string[];
     }[];
   };
+  SpecialSourceApis?: string[]; // 特殊源 key 列表，默认对普通入口隐藏
   SourceConfig: {
     key: string;
     name: string;
@@ -101,7 +108,7 @@ export interface AdminConfig {
   LiveConfig?: {
     key: string;
     name: string;
-    url: string;  // m3u 地址
+    url: string; // m3u 地址
     ua?: string;
     epg?: string; // 节目单
     from: 'config' | 'custom';
@@ -255,6 +262,7 @@ export interface AdminConfig {
       transcodeMp4?: boolean; // 转码mp4
       proxyPlay?: boolean; // 视频播放代理开关
       customUserAgent?: string; // 自定义User-Agent
+      embyAuthorizationHeader?: string; // 自定义 X-Emby-Authorization 请求头
     }>;
     // 旧格式：单源配置（向后兼容）
     Enabled?: boolean;
@@ -265,6 +273,7 @@ export interface AdminConfig {
     UserId?: string;
     AuthToken?: string;
     Libraries?: string[];
+    embyAuthorizationHeader?: string;
     LastSyncTime?: number;
     ItemCount?: number;
   };
@@ -352,7 +361,7 @@ export interface AdminConfig {
       id: string;
       title: string;
       filterText: string;
-      source: 'acgrip' | 'mikan' | 'dmhy';
+      source: 'acgrip' | 'mikan' | 'dmhy' | 'nyaa';
       enabled: boolean;
       lastCheckTime: number;
       lastEpisode: number;

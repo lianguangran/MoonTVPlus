@@ -446,25 +446,45 @@ function HomeClient() {
               kind: 'movie',
               category: '热门',
               type: '全部',
+            }).catch((error) => {
+              console.error('获取热门电影数据失败:', error);
+              return null;
             }),
-            getDoubanCategories({ kind: 'tv', category: 'tv', type: 'tv' }),
-            getDoubanCategories({ kind: 'tv', category: 'show', type: 'show' }),
-            GetBangumiCalendarData(),
+            getDoubanCategories({
+              kind: 'tv',
+              category: 'tv',
+              type: 'tv',
+            }).catch((error) => {
+              console.error('获取热门剧集数据失败:', error);
+              return null;
+            }),
+            getDoubanCategories({
+              kind: 'tv',
+              category: 'show',
+              type: 'show',
+            }).catch((error) => {
+              console.error('获取热门综艺数据失败:', error);
+              return null;
+            }),
+            GetBangumiCalendarData().catch((error) => {
+              console.error('获取新番放送数据失败:', error);
+              return [];
+            }),
           ]);
 
-          if (moviesData.code === 200) {
+          if (moviesData?.code === 200) {
             setHotMovies(moviesData.list);
             if (moviesData.list && moviesData.list.length > 0) {
               setCache('homepage_movies', moviesData.list);
             }
           }
-          if (tvShowsData.code === 200) {
+          if (tvShowsData?.code === 200) {
             setHotTvShows(tvShowsData.list);
             if (tvShowsData.list && tvShowsData.list.length > 0) {
               setCache('homepage_tvshows', tvShowsData.list);
             }
           }
-          if (varietyShowsData.code === 200) {
+          if (varietyShowsData?.code === 200) {
             setHotVarietyShows(varietyShowsData.list);
             if (varietyShowsData.list && varietyShowsData.list.length > 0) {
               setCache('homepage_variety', varietyShowsData.list);
@@ -832,6 +852,7 @@ function HomeClient() {
                     }
                     type={item.media_type === 'tv' ? 'tv' : 'movie'}
                     from='douban'
+                    tmdb_id={item.id}
                     releaseDate={item.release_date}
                     isUpcoming={true}
                   />
@@ -875,7 +896,7 @@ function HomeClient() {
               </button>
 
               {musicEnabled && (
-                <Link href='/music'>
+                <Link href='/music' prefetch={false}>
                   <button
                     className='p-1.5 rounded-lg text-green-500 hover:text-green-600 transition-colors'
                     title='音乐视听'
@@ -886,7 +907,7 @@ function HomeClient() {
               )}
 
               {mangaEnabled && (
-                <Link href='/manga'>
+                <Link href='/manga' prefetch={false}>
                   <button
                     className='p-1.5 rounded-lg text-emerald-500 hover:text-emerald-600 transition-colors'
                     title='漫画展馆'
@@ -897,7 +918,7 @@ function HomeClient() {
               )}
 
               {booksEnabled && (
-                <Link href='/books'>
+                <Link href='/books' prefetch={false}>
                   <button
                     className='p-1.5 rounded-lg text-amber-500 hover:text-amber-600 transition-colors'
                     title='电子书馆'
